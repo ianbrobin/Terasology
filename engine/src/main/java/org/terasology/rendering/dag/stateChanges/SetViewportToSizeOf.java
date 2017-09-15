@@ -15,109 +15,65 @@
  */
 package org.terasology.rendering.dag.stateChanges;
 
-import org.terasology.assets.ResourceUrn;
 import org.terasology.registry.CoreRegistry;
-import org.terasology.rendering.opengl.BaseFBOsManager;
-import org.terasology.rendering.opengl.FBOManagerSubscriber;
-import java.util.Objects;
-import org.terasology.rendering.dag.RenderPipelineTask;
 import org.terasology.rendering.dag.StateChange;
 import org.terasology.rendering.opengl.FBO;
 import org.terasology.rendering.opengl.fbms.DisplayResolutionDependentFBOs;
 
-import static org.terasology.rendering.opengl.fbms.DisplayResolutionDependentFBOs.READONLY_GBUFFER;
+import java.util.Objects;
+
 import static org.lwjgl.opengl.GL11.glViewport;
 
 /**
  * TODO: Add javadocs
  */
-public final class SetViewportToSizeOf implements FBOManagerSubscriber, StateChange {
+public final class SetViewportToSizeOf implements StateChange {
     private static SetViewportToSizeOf defaultInstance;
 
-    private BaseFBOsManager fboManager;
-    private SetViewportToSizeOfTask task;
-    private ResourceUrn fboName;
+    private FBO fbo;
 
-    public SetViewportToSizeOf(ResourceUrn fboName, BaseFBOsManager frameBuffersManager) {
-        this.fboManager = frameBuffersManager;
-        this.fboName = fboName;
+    /**
+     * The constructor, to be used in the initialise method of a node.
+     *
+     * Sample use:
+     *      addDesiredStateChange(new SetViewportToSizeOf(fbo);
+     *
+     * @param fbo The FBO whose dimensions the viewport will be resized to.
+     */
+    public SetViewportToSizeOf(FBO fbo) {
+        this.fbo = fbo;
     }
 
     @Override
     public StateChange getDefaultInstance() {
         if (defaultInstance == null) {
-            defaultInstance = new SetViewportToSizeOf(READONLY_GBUFFER, CoreRegistry.get(DisplayResolutionDependentFBOs.class));
+            defaultInstance = new SetViewportToSizeOf(CoreRegistry.get(DisplayResolutionDependentFBOs.class).getGBufferPair().getLastUpdatedFbo());
         }
         return defaultInstance;
     }
 
     @Override
-    public RenderPipelineTask generateTask() {
-        if (task == null) {
-            task = new SetViewportToSizeOfTask(fboName);
-            fboManager.subscribe(this);
-            update();
-        }
-
-        return task;
-    }
-
-    @Override
     public int hashCode() {
-        return Objects.hash(getFbo().width(), getFbo().height());
+        return Objects.hash(fbo.width(), fbo.height());
     }
 
     @Override
     public boolean equals(Object obj) {
-        if (!(obj instanceof SetViewportToSizeOf))
-            return false;
-
-        SetViewportToSizeOf other = (SetViewportToSizeOf) obj;
-
-        FBO fbo = getFbo();
-        FBO otherFbo = other.getFbo();
-
-        return fbo.width() == otherFbo.width() && fbo.height() == otherFbo.height();
-    }
-
-    @Override
-    public void update() {
-        FBO fbo = getFbo();
-
-        task.setDimensions(fbo.width(), fbo.height());
+        return (obj instanceof SetViewportToSizeOf) && (this.fbo.width() == ((SetViewportToSizeOf) obj).fbo.width())
+                                                    && (this.fbo.height() == ((SetViewportToSizeOf) obj).fbo.height());
     }
 
     @Override
     public String toString() { // TODO: used for logging purposes at the moment, investigate different methods
-        return String.format("%30s: %s", this.getClass().getSimpleName(), fboName);
+        return String.format("%30s: %s (fboId: %s) (%sx%s)", this.getClass().getSimpleName(), fbo.getName(), fbo.getId(), fbo.width(), fbo.height());
     }
 
-    private FBO getFbo() {
-        return fboManager.get(fboName);
+    public static void disposeDefaultInstance() {
+        defaultInstance = null;
     }
 
-    private final class SetViewportToSizeOfTask implements RenderPipelineTask {
-        private int width;
-        private int height;
-        private ResourceUrn fboName;
-
-        private SetViewportToSizeOfTask(ResourceUrn fboName) {
-            this.fboName = fboName;
-        }
-
-        private void setDimensions(int w, int h) {
-            this.width = w;
-            this.height = h;
-        }
-
-        @Override
-        public void execute() {
-            glViewport(0, 0, width, height);
-        }
-
-        @Override
-        public String toString() {
-            return String.format("%30s: %s (%sx%s)", this.getClass().getSimpleName(), fboName, width, height);
-        }
+    @Override
+    public void process() {
+        glViewport(0, 0, fbo.width(), fbo.height());
     }
 }
